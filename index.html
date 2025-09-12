@@ -35,7 +35,40 @@
           />
         </div>
 
-        <button id="requestBtn" class="btn btn-primary">Request QR</button>
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="syncContacts" />
+          <label class="form-check-label" for="syncContacts">
+            Sync Contacts
+          </label>
+        </div>
+
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="syncHistories" />
+          <label class="form-check-label" for="syncHistories">
+            Sync Chat Histories
+          </label>
+        </div>
+
+        <div class="mb-3">
+          <label for="recordingPolicy" class="form-label">Recording Policy</label>
+          <select class="form-select" id="recordingPolicy">
+            <option value="all">All</option>
+            <option value="excluded">Exclude Certain Contacts</option>
+            <option value="selected">Only Specific Contacts</option>
+          </select>
+        </div>
+
+        <div class="mb-3 d-none" id="excludedContactsInputGroup">
+          <label for="excludedContacts" class="form-label">Excluded Contacts (comma-separated)</label>
+          <input type="text" class="form-control" id="excludedContacts" placeholder="e.g. 6281234567,6289876543" />
+        </div>
+
+        <div class="mb-3 d-none" id="selectedContactsInputGroup">
+          <label for="selectedContacts" class="form-label">Selected Contacts (comma-separated)</label>
+          <input type="text" class="form-control" id="selectedContacts" placeholder="e.g. 62811223344,62899887766" />
+        </div>
+
+        <button id="requestBtn" class="btn btn-primary mt-3">Request QR</button>
 
         <div class="mt-4">
           <h5>Status:</h5>
@@ -49,35 +82,40 @@
   </div>
 
   <script>
-    const jwt = prompt('Input JWT Token')
+    const jwt = prompt('Input JWT Token');
     const socket = io('http://uat.medisy.id:4100', {
       transports: ['websocket'],
       reconnectionAttempts: 5,
-      auth: {
-        token: jwt,
-      },
+      auth: { token: jwt },
     });
 
     const requestBtn = document.getElementById('requestBtn');
     const deviceIdInput = document.getElementById('deviceIdInput');
     const qrPreview = document.getElementById('qrPreview');
     const statusDisplay = document.getElementById('statusDisplay');
+    const syncContacts = document.getElementById('syncContacts');
+    const syncHistories = document.getElementById('syncHistories');
+    const recordingPolicy = document.getElementById('recordingPolicy');
+    const excludedContactsInput = document.getElementById('excludedContactsInputGroup');
+    const selectedContactsInput = document.getElementById('selectedContactsInputGroup');
+
+    const excludedContacts = document.getElementById('excludedContacts');
+    const selectedContacts = document.getElementById('selectedContacts');
+
+    // Show/hide input groups based on policy
+    recordingPolicy.addEventListener('change', () => {
+      const policy = recordingPolicy.value;
+      excludedContactsInput.classList.toggle('d-none', policy !== 'excluded');
+      selectedContactsInput.classList.toggle('d-none', policy !== 'selected');
+    });
 
     const updateStatusBadge = (status) => {
       let className = 'text-bg-secondary';
       switch (status) {
-        case 'connected':
-          className = 'text-bg-success';
-          break;
-        case 'qr-waiting':
-          className = 'text-bg-warning';
-          break;
-        case 'disconnected':
-          className = 'text-bg-danger';
-          break;
-        case 'connecting':
-          className = 'text-bg-primary';
-          break;
+        case 'connected': className = 'text-bg-success'; break;
+        case 'qr-waiting': className = 'text-bg-warning'; break;
+        case 'disconnected': className = 'text-bg-danger'; break;
+        case 'connecting': className = 'text-bg-primary'; break;
       }
       statusDisplay.innerHTML = `<span class="badge ${className}">${status}</span>`;
     };
@@ -86,18 +124,34 @@
       console.log('[Socket] Connected to server');
     });
 
-    socket.on('qr', ({ qr }) => {
+    socket.on('qr', (payload) => {
+      console.log('[Socket] QR event received:', payload);
+      const { qr } = payload;
       if (qr) {
         qrPreview.innerHTML = `<img src="${qr}" alt="QR Code">`;
       }
     });
 
-    socket.on('status', ({ status }) => {
+    socket.on('status', (payload) => {
+      console.log('[Socket] Status event received:', payload);
+      const { status } = payload;
       updateStatusBadge(status);
     });
 
-    socket.on('unauthorized', ({ reason }) => {
-      alert(`Unauthorized: ${reason}`);
+    socket.on('unauthorized', (payload) => {
+      alert(`Unauthorized: ${payload?.message || 'Something happen'}`);
+    });
+    
+    socket.on('whatsapp.agent-listening', (payload) => {
+      console.log('agent listening:', payload);
+    });
+    
+    socket.on('message-sent', (payload) => {
+      console.log('message sent:', payload);
+    });
+    
+    socket.on('list-message', (payload) => {
+      console.log('list message fired:', payload);
     });
 
     socket.on('disconnect', () => {
@@ -112,7 +166,33 @@
         return;
       }
 
-      socket.emit('request-qr', { deviceId });
+      const options = {
+        syncContacts: syncContacts.checked,
+        syncHistories: syncHistories.checked,
+        recordingPolicy: recordingPolicy.value,
+      };
+
+      if (options.recordingPolicy === 'excluded') {
+        options.excludedContacts = excludedContacts.value
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean);
+      }
+
+      if (options.recordingPolicy === 'selected') {
+        options.selectedContacts = selectedContacts.value
+          .split(',')
+          .map((x) => x.trim())
+          .filter(Boolean);
+      }
+
+      console.log('options:', options);
+      
+      socket.emit('request-qr', {
+        deviceId,
+        options,
+      });
+
       updateStatusBadge('connecting');
       qrPreview.innerHTML = '<p class="text-muted">Waiting for QR...</p>';
     });
