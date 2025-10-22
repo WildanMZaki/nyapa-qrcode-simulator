@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Payment Simulator — Midtrans & Xendit</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif; }
+    body { margin: 0; padding: 24px; background: #f7f7f8; }
+    .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+    .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 2px 16px rgba(0,0,0,.06); }
+    h1 { margin: 0 0 10px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; background: #eef2f7; color: #333; }
+    .row { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+    .col-12 { grid-column: span 12; } .col-6 { grid-column: span 6; } .col-4 { grid-column: span 4; }
+    .col-3 { grid-column: span 3; } .col-8 { grid-column: span 8; } .col-2 { grid-column: span 2; }
+    label { font-size: 12px; color: #444; display: block; margin-bottom: 6px; }
+    input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #dcdcdc; outline: none; background: #fff; }
+    textarea { resize: vertical; min-height: 72px; }
+    .muted { color: #6b7280; font-size: 12px; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button { padding: 10px 14px; border: 0; border-radius: 10px; cursor: pointer; }
+    .primary { background: #0ea5e9; color: white; }
+    .ghost { background: #eef2f7; color: #111; }
+    .danger { background: #fee2e2; color: #991b1b; }
+    .success { background: #dcfce7; color: #14532d; }
+    .warn { background: #fef3c7; color: #92400e; }
+    .headers { border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; }
+    .header-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 8px; }
+    .header-row:last-child { margin-bottom: 0; }
+    .mini { padding: 8px 10px; border-radius: 8px; font-size: 12px; }
+    .log { background: #0b1020; color: #bfeaff; padding: 14px; border-radius: 10px; white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; max-height: 360px; overflow: auto; }
+    .kv { display: grid; grid-template-columns: 150px 1fr; gap: 8px; font-size: 12px; }
+    .kv div { padding: 6px 8px; border-radius: 8px; background: #f8fafc; }
+    .pill { padding: 2px 8px; border-radius: 999px; background: #f1f5f9; font-size: 12px; }
+    .hidden { display: none !important; }
+    .sep { height: 1px; background: #eef2f7; margin: 10px 0; }
+    code { background: #f1f5f9; padding: 1px 6px; border-radius: 6px; }
+  </style>
+
+  <!-- Snap loader (kept; disabled when provider != midtrans) -->
+  <script id="snap-script"
+    src="https://app.sandbox.midtrans.com/snap/snap.js"
+    data-client-key="SB-MID-CLIENT-REPLACE_ME">
+  </script>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>
+        Payment Simulator
+        <span id="env-badge" class="badge">SANDBOX</span>
+      </h1>
+      <div class="row">
+        <div class="col-6">
+          <label>Provider</label>
+          <select id="providerCode">
+            <option value="midtrans" selected>midtrans (Snap)</option>
+            <option value="xendit">xendit (Redirect)</option>
+          </select>
+        </div>
+        <div class="col-3">
+          <label>Environment</label>
+          <select id="env">
+            <option value="sandbox" selected>Sandbox</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+        <div class="col-3" id="clientKeyWrap">
+          <label>Client Key (Snap.js)</label>
+          <input id="clientKey" value="SB-MID-CLIENT-REPLACE_ME" />
+        </div>
+
+        <div class="col-6">
+          <label>API Base URL</label>
+          <input id="apiBaseUrl" placeholder="http://localhost:9805/api" value="http://localhost:9805/api">
+        </div>
+        <div class="col-3">
+          <label>Create Endpoint</label>
+          <input id="endpointCreate" placeholder="/payments/pay" value="/payments/pay">
+        </div>
+        <div class="col-3">
+          <label>Method</label>
+          <select id="httpMethod">
+            <option value="POST" selected>POST</option>
+            <option value="PUT">PUT</option>
+            <option value="PATCH">PATCH</option>
+          </select>
+        </div>
+
+        <div class="col-6">
+          <label>Verify Endpoint (opsional)</label>
+          <input id="endpointVerify" placeholder="/payments/verify">
+          <div class="muted">Expects body minimal: <code>{ providerCode, invoiceId?, orderId? }</code></div>
+        </div>
+        <div class="col-6">
+          <label>Cancel Endpoint (opsional)</label>
+          <input id="endpointCancel" placeholder="/payments/cancel">
+          <div class="muted">Expects body minimal: <code>{ providerCode, invoiceId?, orderId? }</code></div>
+        </div>
+      </div>
+
+      <div class="headers" style="margin-top:12px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <strong>Request Headers</strong>
+          <div style="display:flex; gap:6px; flex-wrap:wrap;">
+            <button class="mini ghost" id="addAuth">+ Authorization: Bearer</button>
+            <button class="mini ghost" id="addDevHeaders" title="Hanya aktif di Sandbox">+ Dev Headers</button>
+            <button class="mini primary" id="addHeader">+ Add Header</button>
+          </div>
+        </div>
+        <div id="headersContainer"></div>
+        <div class="muted" style="margin-top:8px;">Header <code>Content-Type: application/json</code> ditambahkan otomatis.</div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <div class="col-3">
+          <label>Currency</label>
+          <select id="currency">
+            <option value="IDR" selected>IDR</option>
+            <option value="USD">USD</option>
+          </select>
+        </div>
+        <div class="col-3">
+          <label>Type</label>
+          <select id="type">
+            <option value="features" selected>features</option>
+            <option value="subscription">subscription</option>
+            <option value="topup">topup</option>
+          </select>
+        </div>
+        <div class="col-6">
+          <label>Code / SKU (opsional)</label>
+          <input id="code" placeholder="ex: WA_INTEGRATION_30D">
+        </div>
+        <div class="col-12">
+          <label>Notes (opsional)</label>
+          <textarea id="notes" placeholder="Catatan tambahan invoice..."></textarea>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px;">
+        <div class="col-12">
+          <label>Payload Override (opsional, JSON)</label>
+          <textarea id="payloadOverride" placeholder='{"some":"field"}'></textarea>
+          <div class="muted">Jika diisi, akan di-<em>merge</em> ke payload default.</div>
+        </div>
+      </div>
+
+      <div class="actions" style="margin-top:12px;">
+        <button class="ghost" id="applyEnv">Apply Env</button>
+        <button class="primary" id="btnPay">Pay with Snap</button>
+        <button class="ghost" id="btnPayRedirect">Open Redirect URL</button>
+        <button class="success" id="btnVerify">Verify</button>
+        <button class="warn" id="btnCancel">Cancel/Expire</button>
+        <button class="ghost" id="btnCopyCurl">Copy cURL</button>
+        <button class="danger" id="clearLog">Clear Log</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <strong>Latest Invoice Preview</strong>
+        <span class="muted">auto-filled dari response</span>
+      </div>
+      <div class="sep"></div>
+      <div class="row">
+        <div class="col-6">
+          <div class="kv">
+            <div>Provider</div><div id="pv-provider" class="pill">-</div>
+            <div>Order ID</div><div id="pv-order">-</div>
+            <div>Invoice ID</div><div id="pv-invoice">-</div>
+            <div>Amount</div><div id="pv-amount">-</div>
+            <div>Currency</div><div id="pv-currency">-</div>
+            <div>Status</div><div id="pv-status">-</div>
+          </div>
+        </div>
+        <div class="col-6">
+          <label>Redirect URL</label>
+          <input id="pv-redirect" readonly />
+          <div class="actions" style="margin-top:8px;">
+            <button class="ghost" id="openPreview">Open Redirect</button>
+            <button class="ghost" id="copyRedirect">Copy URL</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <strong>Log</strong>
+      <div class="log" id="log">Log siap…</div>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const log = (msg, data) => {
+      const now = new Date().toLocaleTimeString();
+      const text = `[${now}] ${msg}${data ? ' ' + JSON.stringify(data, null, 2) : ''}\n`;
+      $('log').textContent += text;
+      $('log').scrollTop = $('log').scrollHeight;
+      console.info(msg, data ?? '');
+    };
+
+    const LS_KEY = 'payment-sim.v2';
+
+    function saveState() {
+      const state = {
+        providerCode: $('providerCode').value,
+        env: $('env').value,
+        clientKey: $('clientKey').value,
+        apiBaseUrl: $('apiBaseUrl').value,
+        endpointCreate: $('endpointCreate').value,
+        endpointVerify: $('endpointVerify').value,
+        endpointCancel: $('endpointCancel').value,
+        httpMethod: $('httpMethod').value,
+        currency: $('currency').value,
+        type: $('type').value,
+        code: $('code').value,
+        notes: $('notes').value,
+        headers: getHeadersFromUI(),
+        payloadOverride: $('payloadOverride').value
+      };
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        $('providerCode').value = s.providerCode ?? 'midtrans';
+        $('env').value = s.env ?? 'sandbox';
+        $('clientKey').value = s.clientKey ?? 'SB-MID-CLIENT-REPLACE_ME';
+        $('apiBaseUrl').value = s.apiBaseUrl ?? 'http://localhost:9805/api';
+        $('endpointCreate').value = s.endpointCreate ?? '/payments/pay';
+        $('endpointVerify').value = s.endpointVerify ?? '';
+        $('endpointCancel').value = s.endpointCancel ?? '';
+        $('httpMethod').value = s.httpMethod ?? 'POST';
+        $('currency').value = s.currency ?? 'IDR';
+        $('type').value = s.type ?? 'features';
+        $('code').value = s.code ?? '';
+        $('notes').value = s.notes ?? '';
+        $('payloadOverride').value = s.payloadOverride ?? '';
+
+        // restore headers
+        headersContainer.innerHTML = '';
+        const h = s.headers || {};
+        Object.entries(h).forEach(([k, v]) => {
+          if (k.toLowerCase() === 'content-type') return; // will be auto-added
+          addHeaderRow(k, v);
+        });
+      } catch (e) {
+        console.warn('loadState failed', e);
+      }
+    }
+
+    const headersContainer = $('headersContainer');
+
+    function addHeaderRow(key = '', value = '') {
+      const row = document.createElement('div');
+      row.className = 'header-row';
+
+      const keyInput = document.createElement('input');
+      keyInput.placeholder = 'Header Key (e.g., Authorization)';
+      keyInput.value = key;
+
+      const valInput = document.createElement('input');
+      valInput.placeholder = 'Header Value';
+      valInput.value = value;
+
+      const delBtn = document.createElement('button');
+      delBtn.className = 'mini danger';
+      delBtn.textContent = 'Remove';
+      delBtn.addEventListener('click', () => {
+        headersContainer.removeChild(row);
+        saveState();
+      });
+
+      [keyInput, valInput].forEach(el => el.addEventListener('change', saveState));
+
+      row.appendChild(keyInput);
+      row.appendChild(valInput);
+      row.appendChild(delBtn);
+      headersContainer.appendChild(row);
+    }
+
+    function getHeadersFromUI() {
+      const headers = { 'Content-Type': 'application/json' };
+      headersContainer.querySelectorAll('.header-row').forEach(row => {
+        const [keyInput, valInput] = row.querySelectorAll('input');
+        const k = (keyInput.value || '').trim();
+        const v = (valInput.value || '').trim();
+        if (k) headers[k] = v;
+      });
+      return headers;
+    }
+
+    $('addHeader').addEventListener('click', () => { addHeaderRow(); saveState(); });
+    $('addAuth').addEventListener('click', () => { addHeaderRow('Authorization', 'Bearer YOUR_JWT_TOKEN'); saveState(); });
+    $('addDevHeaders').addEventListener('click', () => {
+      if ($('env').value !== 'sandbox') {
+        alert('Dev Headers hanya tersedia di Sandbox.');
+        return;
+      }
+      addHeaderRow('x-superadmin', '1');
+      addHeaderRow('x-company-id', '67f5fb54ffba1db3b9fb968c');
+      addHeaderRow('x-user-id', '67f5fb54ffba1db3b9fb968d');
+      saveState();
+    });
+
+    function setEnvUI(env) {
+      const badge = $('env-badge');
+      if (env === 'production') {
+        badge.textContent = 'PRODUCTION';
+        badge.style.background = '#fef3c7';
+        badge.style.color = '#92400e';
+      } else {
+        badge.textContent = 'SANDBOX';
+        badge.style.background = '#e0f2fe';
+        badge.style.color = '#075985';
+      }
+    }
+
+    function applyEnv() {
+      const env = $('env').value;
+      const clientKey = $('clientKey').value.trim();
+      const snapScript = $('snap-script');
+
+      const provider = $('providerCode').value;
+      // Only touch Snap.js if provider is midtrans
+      if (provider === 'midtrans') {
+        snapScript.src = env === 'production'
+          ? 'https://app.midtrans.com/snap/snap.js'
+          : 'https://app.sandbox.midtrans.com/snap/snap.js';
+        snapScript.setAttribute('data-client-key', clientKey || 'SB-MID-CLIENT-REPLACE_ME');
+      }
+
+      setEnvUI(env);
+      toggleProviderUI();
+      log('Environment applied', { env, clientKeyPreview: clientKey ? clientKey.slice(0, 8) + '...' : '(empty)' });
+      saveState();
+    }
+
+    function toggleProviderUI() {
+      const provider = $('providerCode').value;
+      const snapOnly = (provider === 'midtrans');
+      $('clientKeyWrap').classList.toggle('hidden', !snapOnly);
+      $('btnPay').disabled = !snapOnly;
+      $('btnPay').title = snapOnly ? '' : 'Snap not used for this provider';
+      saveState();
+    }
+
+    $('applyEnv').addEventListener('click', applyEnv);
+    $('env').addEventListener('change', applyEnv);
+    $('providerCode').addEventListener('change', applyEnv);
+    ['clientKey','apiBaseUrl','endpointCreate','endpointVerify','endpointCancel','httpMethod','currency','type','code','notes','payloadOverride']
+      .forEach(id => $(id).addEventListener('change', saveState));
+
+    function buildUrl(pathInputId) {
+      const base = $('apiBaseUrl').value.replace(/\/$/, '');
+      let path = $(pathInputId).value.trim();
+      if (!path) return base;
+      if (!path.startsWith('/')) path = '/' + path;
+      return base + path;
+    }
+
+    function mergePayload(baseObj, overrideJson) {
+      if (!overrideJson) return baseObj;
+      try {
+        const extra = JSON.parse(overrideJson);
+        return { ...baseObj, ...extra };
+      } catch (e) {
+        alert('Payload Override bukan JSON valid');
+        throw e;
+      }
+    }
+
+    async function callJSON(url, method, headers, bodyObj) {
+      const body = JSON.stringify(bodyObj);
+      log('HTTP ' + method, { url, headers, body: bodyObj });
+      const res = await fetch(url, { method, headers, body });
+      const txt = await res.text();
+      let json; try { json = JSON.parse(txt); } catch {}
+      if (!res.ok) {
+        log('API error', { status: res.status, body: json || txt });
+        throw new Error(`API error ${res.status}`);
+      }
+      const data = (json && (json.data || json.result || json.payload)) || json;
+      log('Response', data);
+      return data;
+    }
+
+    function extractPreview(inv, provider) {
+      // Normalize common fields from your API
+      return {
+        provider,
+        orderId: inv.orderId || inv.orderID || inv.OrderID || '-',
+        invoiceId: inv.invoiceId || inv.InvoiceID || (inv.metadata && inv.metadata.providerInvoiceId) || '-',
+        amount: inv.amount ?? inv.Amount ?? '-',
+        currency: inv.currency ?? inv.Currency ?? '-',
+        status: inv.status ?? inv.Status ?? '-',
+        redirectUrl: inv.redirectUrl || inv.RedirectURL || inv.redirectURL || ''
+      };
+    }
+
+    function updatePreview(pv) {
+      $('pv-provider').textContent = pv.provider || '-';
+      $('pv-order').textContent = pv.orderId || '-';
+      $('pv-invoice').textContent = pv.invoiceId || '-';
+      $('pv-amount').textContent = pv.amount;
+      $('pv-currency').textContent = pv.currency;
+      $('pv-status').textContent = pv.status;
+      $('pv-redirect').value = pv.redirectUrl || '';
+    }
+
+    function currentPayload() {
+      return mergePayload({
+        providerCode: $('providerCode').value,
+        currency: $('currency').value,
+        type: $('type').value,
+        code: $('code').value || '',
+        notes: $('notes').value || ''
+      }, $('payloadOverride').value.trim());
+    }
+
+    function currentHeaders() {
+      return getHeadersFromUI();
+    }
+
+    function buildCurl(url, method, headers, bodyObj) {
+      const parts = ['curl', '-X', method, JSON.stringify(url)];
+      Object.entries(headers).forEach(([k, v]) => {
+        parts.push('-H', JSON.stringify(`${k}: ${v}`));
+      });
+      parts.push('--data', JSON.stringify(JSON.stringify(bodyObj)));
+      return parts.join(' ');
+    }
+
+    $('btnCopyCurl').addEventListener('click', () => {
+      const url = buildUrl('endpointCreate');
+      const method = $('httpMethod').value || 'POST';
+      const headers = currentHeaders();
+      const body = currentPayload();
+      const cmd = buildCurl(url, method, headers, body);
+      navigator.clipboard.writeText(cmd);
+      log('cURL copied to clipboard');
+    });
+
+    async function createInvoice() {
+      const url = buildUrl('endpointCreate');
+      const method = $('httpMethod').value || 'POST';
+      const headers = currentHeaders();
+      const payload = currentPayload();
+      const inv = await callJSON(url, method, headers, payload);
+      const pv = extractPreview(inv, $('providerCode').value);
+      updatePreview(pv);
+      return inv;
+    }
+
+    $('btnPay').addEventListener('click', async () => {
+      try {
+        if ($('providerCode').value !== 'midtrans') {
+          alert('Snap hanya untuk provider midtrans.');
+          return;
+        }
+        const inv = await createInvoice();
+        const token = inv.snapToken || inv.SnapToken;
+        if (!window.snap || typeof window.snap.pay !== 'function') {
+          alert('snap.js belum ready. Klik Apply Env lalu ulangi.');
+          return;
+        }
+        log('Opening Snap with token', { tokenPreview: String(token).slice(0, 8) + '...' });
+        window.snap.pay(token, {
+          onSuccess: (result) => log('Snap onSuccess', result),
+          onPending: (result) => log('Snap onPending', result),
+          onError:   (result) => { log('Snap onError', result); alert('Pembayaran gagal. Cek log.'); },
+          onClose:   () => log('Snap onClose (user closed popup)'),
+        });
+      } catch (e) {
+        log('Error', { message: e.message });
+        alert(e.message);
+      }
+    });
+
+    $('btnPayRedirect').addEventListener('click', async () => {
+      try {
+        const inv = await createInvoice();
+        const url = inv.redirectUrl || inv.RedirectURL || inv.redirectURL;
+        if (url) {
+          log('Redirecting to', { url });
+          window.open(url, '_blank');
+        } else {
+          throw new Error('redirectUrl tidak tersedia dari API');
+        }
+      } catch (e) {
+        log('Error', { message: e.message });
+        alert(e.message);
+      }
+    });
+
+    $('btnVerify').addEventListener('click', async () => {
+      const path = $('endpointVerify').value.trim();
+      if (!path) return alert('Isi Verify Endpoint dulu');
+      try {
+        const url = buildUrl('endpointVerify');
+        const headers = currentHeaders();
+        const body = mergePayload({
+          providerCode: $('providerCode').value,
+          invoiceId: $('pv-invoice').textContent !== '-' ? $('pv-invoice').textContent : undefined,
+          orderId: $('pv-order').textContent !== '-' ? $('pv-order').textContent : undefined
+        }, $('payloadOverride').value.trim());
+        const res = await callJSON(url, 'POST', headers, body);
+        const pv = extractPreview(res, $('providerCode').value);
+        updatePreview(pv);
+      } catch (e) {
+        log('Error', { message: e.message });
+        alert(e.message);
+      }
+    });
+
+    $('btnCancel').addEventListener('click', async () => {
+      const path = $('endpointCancel').value.trim();
+      if (!path) return alert('Isi Cancel Endpoint dulu');
+      try {
+        const url = buildUrl('endpointCancel');
+        const headers = currentHeaders();
+        const body = mergePayload({
+          providerCode: $('providerCode').value,
+          invoiceId: $('pv-invoice').textContent !== '-' ? $('pv-invoice').textContent : undefined,
+          orderId: $('pv-order').textContent !== '-' ? $('pv-order').textContent : undefined
+        }, $('payloadOverride').value.trim());
+        const res = await callJSON(url, 'POST', headers, body);
+        const pv = extractPreview(res, $('providerCode').value);
+        updatePreview(pv);
+      } catch (e) {
+        log('Error', { message: e.message });
+        alert(e.message);
+      }
+    });
+
+    $('clearLog').addEventListener('click', () => { $('log').textContent = 'Log siap…'; });
+
+    $('openPreview').addEventListener('click', () => {
+      const url = $('pv-redirect').value.trim();
+      if (!url) return alert('Redirect URL kosong');
+      window.open(url, '_blank');
+    });
+
+    $('copyRedirect').addEventListener('click', () => {
+      const url = $('pv-redirect').value.trim();
+      if (!url) return alert('Redirect URL kosong');
+      navigator.clipboard.writeText(url);
+      log('Redirect URL copied');
+    });
+
+    // Init
+    addHeaderRow('Authorization', 'Bearer YOUR_JWT_TOKEN');
+    loadState();
+    applyEnv(); // sets env badge & toggles UI
+  </script>
+</body>
+</html>
