@@ -7,13 +7,13 @@
   <style>
     :root { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, Noto Sans, sans-serif; }
     body { margin: 0; padding: 24px; background: #f7f7f8; }
-    .wrap { max-width: 1100px; margin: 0 auto; display: grid; gap: 16px; }
+    .wrap { max-width: 1200px; margin: 0 auto; display: grid; gap: 16px; }
     .card { background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 2px 16px rgba(0,0,0,.06); }
     h1 { margin: 0 0 10px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
     .badge { display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 11px; background: #eef2f7; color: #333; }
     .row { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
-    .col-12 { grid-column: span 12; } .col-6 { grid-column: span 6; } .col-4 { grid-column: span 4; }
-    .col-3 { grid-column: span 3; } .col-8 { grid-column: span 8; } .col-2 { grid-column: span 2; }
+    .col-12 { grid-column: span 12; } .col-10{grid-column: span 10;} .col-9{grid-column: span 9;} .col-8{grid-column: span 8;}
+    .col-6 { grid-column: span 6; } .col-4 { grid-column: span 4; } .col-3{grid-column: span 3;} .col-2{grid-column: span 2;}
     label { font-size: 12px; color: #444; display: block; margin-bottom: 6px; }
     input, select, textarea { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid #dcdcdc; outline: none; background: #fff; }
     textarea { resize: vertical; min-height: 72px; }
@@ -35,10 +35,14 @@
     .pill { padding: 2px 8px; border-radius: 999px; background: #f1f5f9; font-size: 12px; }
     .hidden { display: none !important; }
     .sep { height: 1px; background: #eef2f7; margin: 10px 0; }
-    code { background: #f1f5f9; padding: 1px 6px; border-radius: 6px; }
+    code, pre { background: #0b1020; color: #bfeaff; padding: 10px; border-radius: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; font-size: 12px; }
+    pre { white-space: pre-wrap; max-height: 300px; overflow: auto; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .sec-title { font-weight: 600; margin-bottom: 8px; }
+    .d-none { display: none !important; }
   </style>
 
-  <!-- Snap loader (kept; disabled when provider != midtrans) -->
+  <!-- Snap loader (aktif hanya jika provider = midtrans) -->
   <script id="snap-script"
     src="https://app.sandbox.midtrans.com/snap/snap.js"
     data-client-key="SB-MID-CLIENT-REPLACE_ME">
@@ -51,26 +55,9 @@
         Payment Simulator
         <span id="env-badge" class="badge">SANDBOX</span>
       </h1>
-      <div class="row">
-        <div class="col-6">
-          <label>Provider</label>
-          <select id="providerCode">
-            <option value="midtrans" selected>midtrans (Snap)</option>
-            <option value="xendit">xendit (Redirect)</option>
-          </select>
-        </div>
-        <div class="col-3">
-          <label>Environment</label>
-          <select id="env">
-            <option value="sandbox" selected>Sandbox</option>
-            <option value="production">Production</option>
-          </select>
-        </div>
-        <div class="col-3" id="clientKeyWrap">
-          <label>Client Key (Snap.js)</label>
-          <input id="clientKey" value="SB-MID-CLIENT-REPLACE_ME" />
-        </div>
 
+      <!-- Common settings -->
+      <div class="row" style="margin-top:12px;">
         <div class="col-6">
           <label>API Base URL</label>
           <input id="apiBaseUrl" placeholder="http://localhost:9805/api" value="http://localhost:9805/api">
@@ -88,18 +75,34 @@
           </select>
         </div>
 
-        <div class="col-6">
+        <div class="col-3">
+          <label>Environment</label>
+          <select id="env">
+            <option value="sandbox" selected>Sandbox</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+
+        <!-- Midtrans-only -->
+        <div class="col-3" id="clientKeyWrap">
+          <label>Client Key (Snap.js)</label>
+          <input id="clientKey" value="SB-MID-CLIENT-REPLACE_ME" />
+        </div>
+
+        <!-- Untuk sementara dinonaktifkan -->
+        <div class="col-3 d-none">
           <label>Verify Endpoint (opsional)</label>
           <input id="endpointVerify" placeholder="/payments/verify">
-          <div class="muted">Expects body minimal: <code>{ providerCode, invoiceId?, orderId? }</code></div>
+          <div class="muted">Body minimal: <code>{ providerCode, invoiceId?, orderId? }</code></div>
         </div>
-        <div class="col-6">
+        <div class="col-3 d-none">
           <label>Cancel Endpoint (opsional)</label>
           <input id="endpointCancel" placeholder="/payments/cancel">
-          <div class="muted">Expects body minimal: <code>{ providerCode, invoiceId?, orderId? }</code></div>
+          <div class="muted">Body minimal: <code>{ providerCode, invoiceId?, orderId? }</code></div>
         </div>
       </div>
 
+      <!-- Headers -->
       <div class="headers" style="margin-top:12px;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
           <strong>Request Headers</strong>
@@ -113,15 +116,23 @@
         <div class="muted" style="margin-top:8px;">Header <code>Content-Type: application/json</code> ditambahkan otomatis.</div>
       </div>
 
+      <!-- Payload inputs -->
       <div class="row" style="margin-top:12px;">
-        <div class="col-3">
+        <div class="col-2">
+          <label>Provider</label>
+          <select id="providerCode">
+            <option value="midtrans" selected>midtrans</option>
+            <option value="xendit">xendit</option>
+          </select>
+        </div>
+        <div class="col-2">
           <label>Currency</label>
           <select id="currency">
             <option value="IDR" selected>IDR</option>
             <option value="USD">USD</option>
           </select>
         </div>
-        <div class="col-3">
+        <div class="col-2">
           <label>Type</label>
           <select id="type">
             <option value="features" selected>features</option>
@@ -129,17 +140,18 @@
             <option value="topup">topup</option>
           </select>
         </div>
-        <div class="col-6">
+        <div class="col-4">
           <label>Code / SKU (opsional)</label>
           <input id="code" placeholder="ex: WA_INTEGRATION_30D">
+        </div>
+        <div class="col-2">
+          <label>Qty</label>
+          <input id="qty" type="number" min="1" value="1">
         </div>
         <div class="col-12">
           <label>Notes (opsional)</label>
           <textarea id="notes" placeholder="Catatan tambahan invoice..."></textarea>
         </div>
-      </div>
-
-      <div class="row" style="margin-top:12px;">
         <div class="col-12">
           <label>Payload Override (opsional, JSON)</label>
           <textarea id="payloadOverride" placeholder='{"some":"field"}'></textarea>
@@ -147,10 +159,32 @@
         </div>
       </div>
 
+      <!-- Provider sections -->
+      <div class="row" style="margin-top:12px;">
+        <div class="col-12">
+          <div id="sec-midtrans">
+            <div class="sec-title">Midtrans Actions</div>
+            <div class="actions">
+              <button class="ghost" id="applyEnvMidtrans">Apply Env (Midtrans)</button>
+              <button class="primary" id="btnPayMidtrans">Pay with Snap</button>
+              <button class="ghost" id="btnPayRedirectMid">Open Redirect URL</button>
+            </div>
+            <div class="muted" style="margin-top:6px;">Gunakan tombol Snap untuk membuka popup. Redirect URL juga bisa dipakai sebagai fallback.</div>
+          </div>
+
+          <div id="sec-xendit" class="hidden">
+            <div class="sec-title">Xendit Actions</div>
+            <div class="actions">
+              <button class="ghost" id="applyEnvXendit">Apply Env (Xendit)</button>
+              <button class="primary" id="btnPayXendit">Open Redirect URL</button>
+            </div>
+            <div class="muted" style="margin-top:6px;">Xendit tidak pakai Snap — gunakan Redirect URL.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Common actions -->
       <div class="actions" style="margin-top:12px;">
-        <button class="ghost" id="applyEnv">Apply Env</button>
-        <button class="primary" id="btnPay">Pay with Snap</button>
-        <button class="ghost" id="btnPayRedirect">Open Redirect URL</button>
         <button class="success" id="btnVerify">Verify</button>
         <button class="warn" id="btnCancel">Cancel/Expire</button>
         <button class="ghost" id="btnCopyCurl">Copy cURL</button>
@@ -158,41 +192,53 @@
       </div>
     </div>
 
+    <!-- Live previews -->
     <div class="card">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <strong>Latest Invoice Preview</strong>
-        <span class="muted">auto-filled dari response</span>
-      </div>
-      <div class="sep"></div>
-      <div class="row">
-        <div class="col-6">
-          <div class="kv">
-            <div>Provider</div><div id="pv-provider" class="pill">-</div>
-            <div>Order ID</div><div id="pv-order">-</div>
-            <div>Invoice ID</div><div id="pv-invoice">-</div>
-            <div>Amount</div><div id="pv-amount">-</div>
-            <div>Currency</div><div id="pv-currency">-</div>
-            <div>Status</div><div id="pv-status">-</div>
-          </div>
+      <div class="grid-2">
+        <div>
+          <div class="sec-title">Live Request Payload</div>
+          <pre id="preview-payload">{}</pre>
+          <div class="sec-title" style="margin-top:12px;">Live Headers</div>
+          <pre id="preview-headers">{}</pre>
+          <div class="sec-title" style="margin-top:12px;">cURL</div>
+          <pre id="preview-curl">curl -X POST "http://..."</pre>
         </div>
-        <div class="col-6">
-          <label>Redirect URL</label>
-          <input id="pv-redirect" readonly />
-          <div class="actions" style="margin-top:8px;">
-            <button class="ghost" id="openPreview">Open Redirect</button>
-            <button class="ghost" id="copyRedirect">Copy URL</button>
+        <div>
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <strong>Latest Invoice Preview</strong>
+            <span class="muted">auto-filled dari response</span>
           </div>
+          <div class="sep"></div>
+          <div class="row">
+            <div class="col-6">
+              <div class="kv">
+                <div>Provider</div><div id="pv-provider" class="pill">-</div>
+                <div>Order ID</div><div id="pv-order">-</div>
+                <div>Invoice ID</div><div id="pv-invoice">-</div>
+                <div>Amount</div><div id="pv-amount">-</div>
+                <div>Currency</div><div id="pv-currency">-</div>
+                <div>Status</div><div id="pv-status">-</div>
+              </div>
+            </div>
+            <div class="col-6">
+              <label>Redirect URL</label>
+              <input id="pv-redirect" readonly />
+              <div class="actions" style="margin-top:8px;">
+                <button class="ghost" id="openPreview">Open Redirect</button>
+                <button class="ghost" id="copyRedirect">Copy URL</button>
+              </div>
+            </div>
+          </div>
+          <div class="sep"></div>
+          <strong>Log</strong>
+          <div class="log" id="log">Log siap…</div>
         </div>
       </div>
-    </div>
-
-    <div class="card">
-      <strong>Log</strong>
-      <div class="log" id="log">Log siap…</div>
     </div>
   </div>
 
   <script>
+    // ===== Utils & state =====
     const $ = (id) => document.getElementById(id);
     const log = (msg, data) => {
       const now = new Date().toLocaleTimeString();
@@ -201,59 +247,7 @@
       $('log').scrollTop = $('log').scrollHeight;
       console.info(msg, data ?? '');
     };
-
-    const LS_KEY = 'payment-sim.v2';
-
-    function saveState() {
-      const state = {
-        providerCode: $('providerCode').value,
-        env: $('env').value,
-        clientKey: $('clientKey').value,
-        apiBaseUrl: $('apiBaseUrl').value,
-        endpointCreate: $('endpointCreate').value,
-        endpointVerify: $('endpointVerify').value,
-        endpointCancel: $('endpointCancel').value,
-        httpMethod: $('httpMethod').value,
-        currency: $('currency').value,
-        type: $('type').value,
-        code: $('code').value,
-        notes: $('notes').value,
-        headers: getHeadersFromUI(),
-        payloadOverride: $('payloadOverride').value
-      };
-      localStorage.setItem(LS_KEY, JSON.stringify(state));
-    }
-
-    function loadState() {
-      try {
-        const raw = localStorage.getItem(LS_KEY);
-        if (!raw) return;
-        const s = JSON.parse(raw);
-        $('providerCode').value = s.providerCode ?? 'midtrans';
-        $('env').value = s.env ?? 'sandbox';
-        $('clientKey').value = s.clientKey ?? 'SB-MID-CLIENT-REPLACE_ME';
-        $('apiBaseUrl').value = s.apiBaseUrl ?? 'http://localhost:9805/api';
-        $('endpointCreate').value = s.endpointCreate ?? '/payments/pay';
-        $('endpointVerify').value = s.endpointVerify ?? '';
-        $('endpointCancel').value = s.endpointCancel ?? '';
-        $('httpMethod').value = s.httpMethod ?? 'POST';
-        $('currency').value = s.currency ?? 'IDR';
-        $('type').value = s.type ?? 'features';
-        $('code').value = s.code ?? '';
-        $('notes').value = s.notes ?? '';
-        $('payloadOverride').value = s.payloadOverride ?? '';
-
-        // restore headers
-        headersContainer.innerHTML = '';
-        const h = s.headers || {};
-        Object.entries(h).forEach(([k, v]) => {
-          if (k.toLowerCase() === 'content-type') return; // will be auto-added
-          addHeaderRow(k, v);
-        });
-      } catch (e) {
-        console.warn('loadState failed', e);
-      }
-    }
+    const LS_KEY = 'payment-sim.notabs.v1';
 
     const headersContainer = $('headersContainer');
 
@@ -274,10 +268,10 @@
       delBtn.textContent = 'Remove';
       delBtn.addEventListener('click', () => {
         headersContainer.removeChild(row);
-        saveState();
+        saveState(); renderLivePreviews();
       });
 
-      [keyInput, valInput].forEach(el => el.addEventListener('change', saveState));
+      [keyInput, valInput].forEach(el => el.addEventListener('input', () => { saveState(); renderLivePreviews(); }));
 
       row.appendChild(keyInput);
       row.appendChild(valInput);
@@ -296,18 +290,67 @@
       return headers;
     }
 
-    $('addHeader').addEventListener('click', () => { addHeaderRow(); saveState(); });
-    $('addAuth').addEventListener('click', () => { addHeaderRow('Authorization', 'Bearer YOUR_JWT_TOKEN'); saveState(); });
-    $('addDevHeaders').addEventListener('click', () => {
-      if ($('env').value !== 'sandbox') {
-        alert('Dev Headers hanya tersedia di Sandbox.');
-        return;
+    function saveState() {
+      const state = {
+        env: $('env').value,
+        clientKey: $('clientKey').value,
+        apiBaseUrl: $('apiBaseUrl').value,
+        endpointCreate: $('endpointCreate').value,
+        endpointVerify: $('endpointVerify').value,
+        endpointCancel: $('endpointCancel').value,
+        httpMethod: $('httpMethod').value,
+        providerCode: $('providerCode').value,
+        currency: $('currency').value,
+        type: $('type').value,
+        code: $('code').value,
+        qty: $('qty').value,
+        notes: $('notes').value,
+        payloadOverride: $('payloadOverride').value,
+        headers: getHeadersFromUI(),
+      };
+      localStorage.setItem(LS_KEY, JSON.stringify(state));
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(LS_KEY);
+        if (!raw) return;
+        const s = JSON.parse(raw);
+        // restore headers first
+        headersContainer.innerHTML = '';
+        const h = s.headers || {};
+        Object.entries(h).forEach(([k, v]) => {
+          if (k.toLowerCase() === 'content-type') return;
+          addHeaderRow(k, v);
+        });
+
+        $('env').value = s.env ?? 'sandbox';
+        $('clientKey').value = s.clientKey ?? 'SB-MID-CLIENT-REPLACE_ME';
+        $('apiBaseUrl').value = s.apiBaseUrl ?? 'http://localhost:9805/api';
+        $('endpointCreate').value = s.endpointCreate ?? '/payments/pay';
+        $('endpointVerify').value = s.endpointVerify ?? '';
+        $('endpointCancel').value = s.endpointCancel ?? '';
+        $('httpMethod').value = s.httpMethod ?? 'POST';
+        $('providerCode').value = s.providerCode ?? 'midtrans';
+        $('currency').value = s.currency ?? 'IDR';
+        $('type').value = s.type ?? 'features';
+        $('code').value = s.code ?? '';
+        $('qty').value = s.qty ?? '1';
+        $('notes').value = s.notes ?? '';
+        $('payloadOverride').value = s.payloadOverride ?? '';
+      } catch (e) {
+        console.warn('loadState failed', e);
       }
-      addHeaderRow('x-superadmin', '1');
-      addHeaderRow('x-company-id', '67f5fb54ffba1db3b9fb968c');
-      addHeaderRow('x-user-id', '67f5fb54ffba1db3b9fb968d');
-      saveState();
-    });
+    }
+
+    // ===== Provider toggle & Env =====
+    function toggleProviderUI() {
+      const provider = $('providerCode').value;
+      const snapOnly = (provider === 'midtrans');
+      $('clientKeyWrap').classList.toggle('hidden', !snapOnly);
+      $('sec-midtrans').classList.toggle('hidden', !snapOnly);
+      $('sec-xendit').classList.toggle('hidden', snapOnly);
+    }
 
     function setEnvUI(env) {
       const badge = $('env-badge');
@@ -328,34 +371,44 @@
       const snapScript = $('snap-script');
 
       const provider = $('providerCode').value;
-      // Only touch Snap.js if provider is midtrans
       if (provider === 'midtrans') {
         snapScript.src = env === 'production'
           ? 'https://app.midtrans.com/snap/snap.js'
           : 'https://app.sandbox.midtrans.com/snap/snap.js';
         snapScript.setAttribute('data-client-key', clientKey || 'SB-MID-CLIENT-REPLACE_ME');
       }
-
       setEnvUI(env);
-      toggleProviderUI();
       log('Environment applied', { env, clientKeyPreview: clientKey ? clientKey.slice(0, 8) + '...' : '(empty)' });
       saveState();
+      renderLivePreviews();
     }
 
-    function toggleProviderUI() {
-      const provider = $('providerCode').value;
-      const snapOnly = (provider === 'midtrans');
-      $('clientKeyWrap').classList.toggle('hidden', !snapOnly);
-      $('btnPay').disabled = !snapOnly;
-      $('btnPay').title = snapOnly ? '' : 'Snap not used for this provider';
-      saveState();
+    // ===== Build request previews =====
+    function mergePayload(baseObj, overrideJson) {
+      if (!overrideJson) return baseObj;
+      try {
+        const extra = JSON.parse(overrideJson);
+        return { ...baseObj, ...extra };
+      } catch (e) {
+        log('Payload Override bukan JSON valid', { error: e.message });
+        return baseObj;
+      }
     }
 
-    $('applyEnv').addEventListener('click', applyEnv);
-    $('env').addEventListener('change', applyEnv);
-    $('providerCode').addEventListener('change', applyEnv);
-    ['clientKey','apiBaseUrl','endpointCreate','endpointVerify','endpointCancel','httpMethod','currency','type','code','notes','payloadOverride']
-      .forEach(id => $(id).addEventListener('change', saveState));
+    function currentPayload() {
+      return mergePayload({
+        providerCode: $('providerCode').value,
+        currency: $('currency').value,
+        type: $('type').value,
+        code: $('code').value || '',
+        notes: $('notes').value || '',
+        qty: Number($('qty').value) || 1
+      }, $('payloadOverride').value.trim());
+    }
+
+    function currentHeaders() {
+      return getHeadersFromUI();
+    }
 
     function buildUrl(pathInputId) {
       const base = $('apiBaseUrl').value.replace(/\/$/, '');
@@ -365,17 +418,26 @@
       return base + path;
     }
 
-    function mergePayload(baseObj, overrideJson) {
-      if (!overrideJson) return baseObj;
-      try {
-        const extra = JSON.parse(overrideJson);
-        return { ...baseObj, ...extra };
-      } catch (e) {
-        alert('Payload Override bukan JSON valid');
-        throw e;
-      }
+    function buildCurl(url, method, headers, bodyObj) {
+      const parts = ['curl', '-X', method, JSON.stringify(url)];
+      Object.entries(headers).forEach(([k, v]) => {
+        parts.push('-H', JSON.stringify(`${k}: ${v}`));
+      });
+      parts.push('--data', JSON.stringify(JSON.stringify(bodyObj)));
+      return parts.join(' ');
     }
 
+    function renderLivePreviews() {
+      const payload = currentPayload();
+      const headers = currentHeaders();
+      const url = buildUrl('endpointCreate');
+      const method = $('httpMethod').value || 'POST';
+      $('preview-payload').textContent = JSON.stringify(payload, null, 2);
+      $('preview-headers').textContent = JSON.stringify(headers, null, 2);
+      $('preview-curl').textContent = buildCurl(url, method, headers, payload);
+    }
+
+    // ===== Network =====
     async function callJSON(url, method, headers, bodyObj) {
       const body = JSON.stringify(bodyObj);
       log('HTTP ' + method, { url, headers, body: bodyObj });
@@ -392,7 +454,6 @@
     }
 
     function extractPreview(inv, provider) {
-      // Normalize common fields from your API
       return {
         provider,
         orderId: inv.orderId || inv.orderID || inv.OrderID || '-',
@@ -414,60 +475,29 @@
       $('pv-redirect').value = pv.redirectUrl || '';
     }
 
-    function currentPayload() {
-      return mergePayload({
-        providerCode: $('providerCode').value,
-        currency: $('currency').value,
-        type: $('type').value,
-        code: $('code').value || '',
-        notes: $('notes').value || ''
-      }, $('payloadOverride').value.trim());
-    }
-
-    function currentHeaders() {
-      return getHeadersFromUI();
-    }
-
-    function buildCurl(url, method, headers, bodyObj) {
-      const parts = ['curl', '-X', method, JSON.stringify(url)];
-      Object.entries(headers).forEach(([k, v]) => {
-        parts.push('-H', JSON.stringify(`${k}: ${v}`));
-      });
-      parts.push('--data', JSON.stringify(JSON.stringify(bodyObj)));
-      return parts.join(' ');
-    }
-
-    $('btnCopyCurl').addEventListener('click', () => {
-      const url = buildUrl('endpointCreate');
-      const method = $('httpMethod').value || 'POST';
-      const headers = currentHeaders();
-      const body = currentPayload();
-      const cmd = buildCurl(url, method, headers, body);
-      navigator.clipboard.writeText(cmd);
-      log('cURL copied to clipboard');
-    });
-
-    async function createInvoice() {
+    async function createInvoiceAndPreview(provider) {
       const url = buildUrl('endpointCreate');
       const method = $('httpMethod').value || 'POST';
       const headers = currentHeaders();
       const payload = currentPayload();
       const inv = await callJSON(url, method, headers, payload);
-      const pv = extractPreview(inv, $('providerCode').value);
+      const pv = extractPreview(inv, provider);
       updatePreview(pv);
       return inv;
     }
 
-    $('btnPay').addEventListener('click', async () => {
+    // ===== Actions: Midtrans =====
+    $('applyEnvMidtrans').addEventListener('click', applyEnv);
+    $('btnPayMidtrans').addEventListener('click', async () => {
       try {
         if ($('providerCode').value !== 'midtrans') {
-          alert('Snap hanya untuk provider midtrans.');
+          alert('Pilih provider midtrans dulu.');
           return;
         }
-        const inv = await createInvoice();
+        const inv = await createInvoiceAndPreview('midtrans');
         const token = inv.snapToken || inv.SnapToken;
         if (!window.snap || typeof window.snap.pay !== 'function') {
-          alert('snap.js belum ready. Klik Apply Env lalu ulangi.');
+          alert('snap.js belum ready. Klik Apply Env (Midtrans) lalu ulangi.');
           return;
         }
         log('Opening Snap with token', { tokenPreview: String(token).slice(0, 8) + '...' });
@@ -483,9 +513,13 @@
       }
     });
 
-    $('btnPayRedirect').addEventListener('click', async () => {
+    $('btnPayRedirectMid').addEventListener('click', async () => {
       try {
-        const inv = await createInvoice();
+        if ($('providerCode').value !== 'midtrans') {
+          alert('Pilih provider midtrans dulu.');
+          return;
+        }
+        const inv = await createInvoiceAndPreview('midtrans');
         const url = inv.redirectUrl || inv.RedirectURL || inv.redirectURL;
         if (url) {
           log('Redirecting to', { url });
@@ -499,6 +533,29 @@
       }
     });
 
+    // ===== Actions: Xendit =====
+    $('applyEnvXendit').addEventListener('click', () => { applyEnv(); }); // hanya untuk refresh badge/preview
+    $('btnPayXendit').addEventListener('click', async () => {
+      try {
+        if ($('providerCode').value !== 'xendit') {
+          alert('Pilih provider xendit dulu.');
+          return;
+        }
+        const inv = await createInvoiceAndPreview('xendit');
+        const url = inv.redirectUrl || inv.RedirectURL || inv.redirectURL;
+        if (url) {
+          log('Redirecting to', { url });
+          window.open(url, '_blank');
+        } else {
+          throw new Error('redirectUrl tidak tersedia dari API');
+        }
+      } catch (e) {
+        log('Error', { message: e.message });
+        alert(e.message);
+      }
+    });
+
+    // ===== Verify & Cancel =====
     $('btnVerify').addEventListener('click', async () => {
       const path = $('endpointVerify').value.trim();
       if (!path) return alert('Isi Verify Endpoint dulu');
@@ -539,14 +596,13 @@
       }
     });
 
+    // ===== Misc =====
     $('clearLog').addEventListener('click', () => { $('log').textContent = 'Log siap…'; });
-
     $('openPreview').addEventListener('click', () => {
       const url = $('pv-redirect').value.trim();
       if (!url) return alert('Redirect URL kosong');
       window.open(url, '_blank');
     });
-
     $('copyRedirect').addEventListener('click', () => {
       const url = $('pv-redirect').value.trim();
       if (!url) return alert('Redirect URL kosong');
@@ -554,10 +610,35 @@
       log('Redirect URL copied');
     });
 
-    // Init
+    $('addHeader').addEventListener('click', () => { addHeaderRow(); saveState(); renderLivePreviews(); });
+    $('addAuth').addEventListener('click', () => { addHeaderRow('Authorization', 'Bearer YOUR_JWT_TOKEN'); saveState(); renderLivePreviews(); });
+    $('addDevHeaders').addEventListener('click', () => {
+      if ($('env').value !== 'sandbox') {
+        alert('Dev Headers hanya tersedia di Sandbox.');
+        return;
+      }
+      addHeaderRow('x-superadmin', '1');
+      addHeaderRow('x-company-id', '67f5fb54ffba1db3b9fb968c');
+      addHeaderRow('x-user-id', '67f5fb54ffba1db3b9fb968d');
+      saveState(); renderLivePreviews();
+    });
+
+    // inputs -> live preview
+    [
+      'env','clientKey','apiBaseUrl','endpointCreate','endpointVerify','endpointCancel',
+      'httpMethod','providerCode','currency','type','code','qty','notes','payloadOverride'
+    ].forEach(id => $(id).addEventListener('input', () => { 
+      toggleProviderUI();
+      saveState(); 
+      renderLivePreviews(); 
+    }));
+
+    // ===== Init =====
     addHeaderRow('Authorization', 'Bearer YOUR_JWT_TOKEN');
     loadState();
-    applyEnv(); // sets env badge & toggles UI
+    toggleProviderUI();
+    renderLivePreviews();
+    applyEnv();
   </script>
 </body>
 </html>
