@@ -1,201 +1,804 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>Nyapa QR Scanner</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  <link
-    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-    rel="stylesheet"
-  />
-  <style>
-    #qrPreview img {
-      max-width: 300px;
-      border: 1px solid #dee2e6;
-      border-radius: 8px;
-      padding: 10px;
-      background-color: #fff;
-    }
-  </style>
-</head>
-<body class="bg-light">
-  <div class="container py-5">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h3 class="card-title mb-3">Request WhatsApp QR</h3>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Nyapa QR Scanner Simulator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet" />
 
-        <div class="mb-3">
-          <label for="deviceIdInput" class="form-label">Device ID</label>
-          <input
-            type="text"
-            class="form-control"
-            id="deviceIdInput"
-            placeholder="e.g. device-000001"
-          />
+    <style>
+      body { background: #f6f7fb; }
+      .card { border: 0; border-radius: 16px; }
+      .card-header { background: transparent; border-bottom: 1px solid #eef0f5; }
+      .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+      #qrPreview img {
+        max-width: 320px;
+        border: 1px solid #e9ecef;
+        border-radius: 12px;
+        padding: 12px;
+        background: #fff;
+      }
+      .token-box {
+        background: #0b1220;
+        color: #e5e7eb;
+        border-radius: 12px;
+        padding: 12px;
+        font-size: 12px;
+        overflow: auto;
+        max-height: 160px;
+      }
+      .log-box {
+        background: #fff;
+        border: 1px solid #eef0f5;
+        border-radius: 12px;
+        padding: 12px;
+        height: 220px;
+        overflow: auto;
+        font-size: 13px;
+      }
+      .avatar {
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        object-fit: cover;
+        border: 1px solid #e9ecef;
+        background: #fff;
+      }
+      .small-muted { font-size: 12px; color: #6b7280; }
+      .badge-soft {
+        border: 1px solid rgba(0,0,0,0.08);
+        background: rgba(255,255,255,0.6);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container py-4 py-md-5">
+      <!-- Header -->
+      <div
+        class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between mb-4">
+        <div>
+          <h3 class="mb-1">Nyapa QR Scanner Simulator</h3>
+          <div class="small-muted">Auth + Socket + QR flow, disimpan per
+            environment</div>
         </div>
 
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="syncContacts" />
-          <label class="form-check-label" for="syncContacts">
-            Sync Contacts
-          </label>
-        </div>
-
-        <div class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" id="syncHistories" />
-          <label class="form-check-label" for="syncHistories">
-            Sync Chat Histories
-          </label>
-        </div>
-
-        <div class="mb-3">
-          <label for="recordingPolicy" class="form-label">Recording Policy</label>
-          <select class="form-select" id="recordingPolicy">
-            <option value="all">All</option>
-            <option value="excluded">Exclude Certain Contacts</option>
-            <option value="selected">Only Specific Contacts</option>
+        <div class="mt-3 mt-md-0 d-flex gap-2 align-items-center">
+          <label class="small-muted mb-0">Environment</label>
+          <select class="form-select form-select-sm" id="envSelect"
+            style="width: 180px;">
+            <option value="local">Local</option>
+            <option value="uat">UAT</option>
+            <option value="prod">Prod</option>
           </select>
+          <button class="btn btn-sm btn-outline-danger" id="resetEnvBtn">Reset
+            env</button>
         </div>
+      </div>
 
-        <div class="mb-3 d-none" id="excludedContactsInputGroup">
-          <label for="excludedContacts" class="form-label">Excluded Contacts (comma-separated)</label>
-          <input type="text" class="form-control" id="excludedContacts" placeholder="e.g. 6281234567,6289876543" />
-        </div>
+      <div class="row g-3 g-md-4">
+        <!-- LEFT COLUMN -->
+        <div class="col-lg-7">
+          <!-- Auth Card -->
+          <div class="card shadow-sm mb-3">
+            <div class="card-header py-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <div class="fw-semibold">1) Auth Login</div>
+                  <div class="small-muted">Set URL + kredensial sekali, otomatis
+                    tersimpan per environment</div>
+                </div>
+                <span class="badge badge-soft text-dark"
+                  id="authStatusBadge">Not logged in</span>
+              </div>
+            </div>
 
-        <div class="mb-3 d-none" id="selectedContactsInputGroup">
-          <label for="selectedContacts" class="form-label">Selected Contacts (comma-separated)</label>
-          <input type="text" class="form-control" id="selectedContacts" placeholder="e.g. 62811223344,62899887766" />
-        </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Auth Login URL</label>
+                  <input class="form-control" id="authUrlInput"
+                    placeholder="e.g. http://localhost:3000/api/auth/login" />
+                </div>
 
-        <button id="requestBtn" class="btn btn-primary mt-3">Request QR</button>
+                <div class="col-md-6">
+                  <label class="form-label">Email</label>
+                  <input class="form-control" id="emailInput"
+                    placeholder="useremail@gmail.com" />
+                </div>
 
-        <div class="mt-4">
-          <h5>Status:</h5>
-          <div id="statusDisplay" class="mb-3">
-            <span class="badge text-bg-secondary">Not connected</span>
+                <div class="col-md-6">
+                  <label class="form-label">Password</label>
+                  <input class="form-control" id="passwordInput" type="password"
+                    placeholder="••••••••" />
+                </div>
+
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button class="btn btn-primary" id="loginBtn">Login</button>
+                  <button class="btn btn-outline-secondary"
+                    id="logoutAuthBtn">Clear Token</button>
+                  <div class="ms-auto small-muted align-self-center"
+                    id="loginMessage"></div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">JWT Token (editable)</label>
+                  <textarea class="form-control mono" id="jwtTokenInput"
+                    rows="3"
+                    placeholder="Token akan terisi setelah login"></textarea>
+                  <div class="d-flex gap-2 mt-2">
+                    <button class="btn btn-sm btn-outline-dark"
+                      id="copyTokenBtn">Copy token</button>
+                    <button class="btn btn-sm btn-outline-dark"
+                      id="copyRefreshBtn">Copy refresh</button>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="small-muted mb-2">Token preview</div>
+                  <div class="token-box mono" id="tokenPreview">No token</div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div id="qrPreview" class="text-center"></div>
+
+          <!-- Socket Card -->
+          <div class="card shadow-sm mb-3">
+            <div class="card-header py-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <div class="fw-semibold">2) Socket Controller</div>
+                  <div class="small-muted">Configurable per environment (pair
+                    dengan auth)</div>
+                </div>
+                <div id="socketStatusDisplay">
+                  <span class="badge text-bg-secondary">disconnected</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Socket URL</label>
+                  <input class="form-control" id="socketUrlInput"
+                    placeholder="e.g. http://localhost:3100" />
+                </div>
+
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button class="btn btn-success"
+                    id="connectSocketBtn">Connect</button>
+                  <button class="btn btn-outline-secondary"
+                    id="disconnectSocketBtn">Disconnect</button>
+                  <span class="small-muted align-self-center ms-auto"
+                    id="socketHint">
+                    Socket pakai token dari field JWT di atas
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Request QR Card -->
+          <div class="card shadow-sm">
+            <div class="card-header py-3">
+              <div class="fw-semibold">3) Request WhatsApp QR</div>
+              <div class="small-muted">Settings sync + recording policy</div>
+            </div>
+
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Device ID</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="deviceIdInput"
+                    placeholder="e.g. device-000001" />
+                </div>
+
+                <div class="col-12">
+                  <div class="form-check">
+                    <input class="form-check-input" type="checkbox"
+                      id="syncContacts" />
+                    <label class="form-check-label" for="syncContacts">Sync
+                      Contacts</label>
+                  </div>
+
+                  <div class="form-check mt-1">
+                    <input class="form-check-input" type="checkbox"
+                      id="syncHistories" />
+                    <label class="form-check-label" for="syncHistories">Sync
+                      Chat Histories</label>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Recording Policy</label>
+                  <select class="form-select" id="recordingPolicy">
+                    <option value="all">All</option>
+                    <option value="excluded">Exclude Certain Contacts</option>
+                    <option value="selected">Only Specific Contacts</option>
+                  </select>
+                </div>
+
+                <div class="col-12 d-none" id="excludedContactsInputGroup">
+                  <label class="form-label">Excluded Contacts
+                    (comma-separated)</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="excludedContacts"
+                    placeholder="e.g. 6281234567,6289876543" />
+                </div>
+
+                <div class="col-12 d-none" id="selectedContactsInputGroup">
+                  <label class="form-label">Selected Contacts
+                    (comma-separated)</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="selectedContacts"
+                    placeholder="e.g. 62811223344,62899887766" />
+                </div>
+
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button id="requestBtn" class="btn btn-primary">Request
+                    QR</button>
+                  <button id="logoutBtn" class="btn btn-outline-danger">Logout
+                    WA Device</button>
+                  <span class="small-muted ms-auto align-self-center">Pastikan
+                    socket sudah connect</span>
+                </div>
+
+                <div class="col-12">
+                  <h6 class="mb-2">QR Preview</h6>
+                  <div id="qrPreview" class="text-center py-2"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- RIGHT COLUMN -->
+        <div class="col-lg-5">
+          <!-- User Preview -->
+          <div class="card shadow-sm mb-3">
+            <div class="card-header py-3">
+              <div class="fw-semibold">User Payload</div>
+              <div class="small-muted">Nama + email + avatar dari response
+                login</div>
+            </div>
+            <div class="card-body">
+              <div class="d-flex gap-3 align-items-center">
+                <img id="userAvatar" class="avatar" alt="avatar" />
+                <div>
+                  <div class="fw-semibold" id="userFullname">No user</div>
+                  <div class="small-muted" id="userEmail">—</div>
+                  <div class="small-muted" id="userCompany">—</div>
+                </div>
+              </div>
+              <hr />
+              <div class="small-muted mb-2">Raw user JSON</div>
+              <div class="token-box mono" id="userJsonPreview">No data</div>
+            </div>
+          </div>
+
+          <!-- Activity Log -->
+          <div class="card shadow-sm">
+            <div
+              class="card-header py-3 d-flex align-items-center justify-content-between">
+              <div>
+                <div class="fw-semibold">Activity Log</div>
+                <div class="small-muted">Event socket & auth output</div>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary"
+                id="clearLogBtn">Clear</button>
+            </div>
+            <div class="card-body">
+              <div class="log-box" id="logBox"></div>
+              <div class="small-muted mt-2">
+                Tip: log ini sengaja dibuat biar kamu gak harus buka console
+                terus.
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <script>
-    const jwt = prompt('Input JWT Token');
-    const socket = io('http://uat.medisy.id:4100', {
-      transports: ['websocket'],
-      reconnectionAttempts: 5,
-      auth: { token: jwt },
-    });
-
-    const requestBtn = document.getElementById('requestBtn');
-    const deviceIdInput = document.getElementById('deviceIdInput');
-    const qrPreview = document.getElementById('qrPreview');
-    const statusDisplay = document.getElementById('statusDisplay');
-    const syncContacts = document.getElementById('syncContacts');
-    const syncHistories = document.getElementById('syncHistories');
-    const recordingPolicy = document.getElementById('recordingPolicy');
-    const excludedContactsInput = document.getElementById('excludedContactsInputGroup');
-    const selectedContactsInput = document.getElementById('selectedContactsInputGroup');
-
-    const excludedContacts = document.getElementById('excludedContacts');
-    const selectedContacts = document.getElementById('selectedContacts');
-
-    // Show/hide input groups based on policy
-    recordingPolicy.addEventListener('change', () => {
-      const policy = recordingPolicy.value;
-      excludedContactsInput.classList.toggle('d-none', policy !== 'excluded');
-      selectedContactsInput.classList.toggle('d-none', policy !== 'selected');
-    });
-
-    const updateStatusBadge = (status) => {
-      let className = 'text-bg-secondary';
-      switch (status) {
-        case 'connected': className = 'text-bg-success'; break;
-        case 'qr-waiting': className = 'text-bg-warning'; break;
-        case 'disconnected': className = 'text-bg-danger'; break;
-        case 'connecting': className = 'text-bg-primary'; break;
-      }
-      statusDisplay.innerHTML = `<span class="badge ${className}">${status}</span>`;
-    };
-
-    socket.on('connect', () => {
-      console.log('[Socket] Connected to server');
-    });
-
-    socket.on('qr', (payload) => {
-      console.log('[Socket] QR event received:', payload);
-      const { qr } = payload;
-      if (qr) {
-        qrPreview.innerHTML = `<img src="${qr}" alt="QR Code">`;
-      }
-    });
-
-    socket.on('status', (payload) => {
-      console.log('[Socket] Status event received:', payload);
-      const { status } = payload;
-      updateStatusBadge(status);
-    });
-
-    socket.on('unauthorized', (payload) => {
-      alert(`Unauthorized: ${payload?.message || 'Something happen'}`);
-    });
-    
-    socket.on('whatsapp.agent-listening', (payload) => {
-      console.log('agent listening:', payload);
-    });
-    
-    socket.on('message-sent', (payload) => {
-      console.log('message sent:', payload);
-    });
-    
-    socket.on('list-message', (payload) => {
-      console.log('list message fired:', payload);
-    });
-
-    socket.on('disconnect', () => {
-      console.warn('[Socket] Disconnected from server');
-      updateStatusBadge('disconnected');
-    });
-
-    requestBtn.addEventListener('click', () => {
-      const deviceId = deviceIdInput.value.trim();
-      if (!deviceId) {
-        alert('Please enter a device ID');
-        return;
-      }
-
-      const options = {
-        syncContacts: syncContacts.checked,
-        syncHistories: syncHistories.checked,
-        recordingPolicy: recordingPolicy.value,
+    <script>
+      // -----------------------------
+      // Storage helpers (per env)
+      // -----------------------------
+      const STORAGE_KEY = "nyapa_simulator_env_config_v1";
+      const defaultConfig = {
+        local: {
+          authUrl: "http://localhost:3000/api/auth/login",
+          email: "",
+          password: "",
+          socketUrl: "http://localhost:3100",
+          token: "",
+          refreshToken: "",
+          user: null,
+        },
+        uat: {
+          authUrl: "http://uat.medisy.id/api/auth/login",
+          email: "",
+          password: "",
+          socketUrl: "http://uat.medisy.id:4100",
+          token: "",
+          refreshToken: "",
+          user: null,
+        },
+        prod: {
+          authUrl: "",
+          email: "",
+          password: "",
+          socketUrl: "",
+          token: "",
+          refreshToken: "",
+          user: null,
+        },
       };
 
-      if (options.recordingPolicy === 'excluded') {
-        options.excludedContacts = excludedContacts.value
-          .split(',')
-          .map((x) => x.trim())
-          .filter(Boolean);
+      function loadAllConfig() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return structuredClone(defaultConfig);
+          const parsed = JSON.parse(raw);
+          // merge minimal (avoid missing keys)
+          return { ...structuredClone(defaultConfig), ...parsed };
+        } catch (e) {
+          return structuredClone(defaultConfig);
+        }
       }
 
-      if (options.recordingPolicy === 'selected') {
-        options.selectedContacts = selectedContacts.value
-          .split(',')
-          .map((x) => x.trim())
-          .filter(Boolean);
+      function saveAllConfig(cfg) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
       }
 
-      console.log('options:', options);
-      
-      socket.emit('request-qr', {
-        deviceId,
-        options,
+      function getEnv() {
+        return document.getElementById("envSelect").value;
+      }
+
+      function getEnvConfig() {
+        const all = loadAllConfig();
+        const env = getEnv();
+        return { all, env, cfg: all[env] };
+      }
+
+      function updateEnvConfig(patch) {
+        const { all, env, cfg } = getEnvConfig();
+        all[env] = { ...cfg, ...patch };
+        saveAllConfig(all);
+        return all[env];
+      }
+
+      // -----------------------------
+      // UI refs
+      // -----------------------------
+      const envSelect = document.getElementById("envSelect");
+      const resetEnvBtn = document.getElementById("resetEnvBtn");
+
+      const authUrlInput = document.getElementById("authUrlInput");
+      const emailInput = document.getElementById("emailInput");
+      const passwordInput = document.getElementById("passwordInput");
+      const loginBtn = document.getElementById("loginBtn");
+      const logoutAuthBtn = document.getElementById("logoutAuthBtn");
+      const loginMessage = document.getElementById("loginMessage");
+
+      const jwtTokenInput = document.getElementById("jwtTokenInput");
+      const tokenPreview = document.getElementById("tokenPreview");
+      const copyTokenBtn = document.getElementById("copyTokenBtn");
+      const copyRefreshBtn = document.getElementById("copyRefreshBtn");
+      const authStatusBadge = document.getElementById("authStatusBadge");
+
+      const socketUrlInput = document.getElementById("socketUrlInput");
+      const connectSocketBtn = document.getElementById("connectSocketBtn");
+      const disconnectSocketBtn = document.getElementById("disconnectSocketBtn");
+      const socketStatusDisplay = document.getElementById("socketStatusDisplay");
+
+      const requestBtn = document.getElementById("requestBtn");
+      const logoutBtn = document.getElementById("logoutBtn");
+      const deviceIdInput = document.getElementById("deviceIdInput");
+      const qrPreview = document.getElementById("qrPreview");
+
+      const syncContacts = document.getElementById("syncContacts");
+      const syncHistories = document.getElementById("syncHistories");
+      const recordingPolicy = document.getElementById("recordingPolicy");
+      const excludedContactsInputGroup = document.getElementById("excludedContactsInputGroup");
+      const selectedContactsInputGroup = document.getElementById("selectedContactsInputGroup");
+      const excludedContacts = document.getElementById("excludedContacts");
+      const selectedContacts = document.getElementById("selectedContacts");
+
+      const userAvatar = document.getElementById("userAvatar");
+      const userFullname = document.getElementById("userFullname");
+      const userEmail = document.getElementById("userEmail");
+      const userCompany = document.getElementById("userCompany");
+      const userJsonPreview = document.getElementById("userJsonPreview");
+
+      const logBox = document.getElementById("logBox");
+      const clearLogBtn = document.getElementById("clearLogBtn");
+
+      // -----------------------------
+      // Logger
+      // -----------------------------
+      function log(type, message, obj) {
+        const time = new Date().toLocaleTimeString();
+        const safeObj = obj ? `<div class="mono small-muted mt-1">${escapeHtml(JSON.stringify(obj, null, 2))}</div>` : "";
+        const badge = type === "error"
+          ? "text-bg-danger"
+          : type === "warn"
+            ? "text-bg-warning"
+            : type === "socket"
+              ? "text-bg-primary"
+              : "text-bg-secondary";
+
+        const el = document.createElement("div");
+        el.className = "mb-2";
+        el.innerHTML = `
+          <div class="d-flex gap-2 align-items-center">
+            <span class="badge ${badge}">${type}</span>
+            <span class="small-muted">${time}</span>
+          </div>
+          <div class="mt-1">${escapeHtml(message)}</div>
+          ${safeObj}
+        `;
+        logBox.prepend(el);
+      }
+
+      function escapeHtml(str) {
+        return String(str)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      clearLogBtn.addEventListener("click", () => (logBox.innerHTML = ""));
+
+      // -----------------------------
+      // Status helpers
+      // -----------------------------
+      function setSocketBadge(status) {
+        let className = "text-bg-secondary";
+        if (status === "connected") className = "text-bg-success";
+        if (status === "qr-waiting") className = "text-bg-warning";
+        if (status === "disconnected") className = "text-bg-danger";
+        if (status === "connecting") className = "text-bg-primary";
+        socketStatusDisplay.innerHTML = `<span class="badge ${className}">${status}</span>`;
+      }
+
+      function setAuthBadge(isLoggedIn) {
+        authStatusBadge.textContent = isLoggedIn ? "Logged in" : "Not logged in";
+        authStatusBadge.className = "badge badge-soft " + (isLoggedIn ? "text-success" : "text-dark");
+      }
+
+      function setTokenUI(token, refreshToken) {
+        jwtTokenInput.value = token || "";
+        tokenPreview.textContent = token ? token : "No token";
+        updateEnvConfig({ token: token || "", refreshToken: refreshToken || "" });
+        setAuthBadge(!!token);
+      }
+
+      function setUserUI(user) {
+        const placeholder =
+          "data:image/svg+xml;charset=utf-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
+              <rect width="100%" height="100%" fill="#f3f4f6"/>
+              <circle cx="64" cy="52" r="22" fill="#d1d5db"/>
+              <rect x="26" y="82" width="76" height="30" rx="15" fill="#d1d5db"/>
+            </svg>
+          `);
+
+        if (!user) {
+          userAvatar.src = placeholder;
+          userFullname.textContent = "No user";
+          userEmail.textContent = "—";
+          userCompany.textContent = "—";
+          userJsonPreview.textContent = "No data";
+          updateEnvConfig({ user: null });
+          return;
+        }
+
+        userAvatar.src = user.imageProfile || placeholder;
+        userFullname.textContent = user.fullname || "(No fullname)";
+        userEmail.textContent = user.email || "(No email)";
+        userCompany.textContent = user.companyId ? `companyId: ${user.companyId}` : "companyId: —";
+        userJsonPreview.textContent = JSON.stringify(user, null, 2);
+        updateEnvConfig({ user });
+      }
+
+      // -----------------------------
+      // Environment switching + load UI
+      // -----------------------------
+      function hydrateFromEnv() {
+        const { cfg } = getEnvConfig();
+        authUrlInput.value = cfg.authUrl || "";
+        emailInput.value = cfg.email || "";
+        passwordInput.value = cfg.password || "";
+        socketUrlInput.value = cfg.socketUrl || "";
+        setTokenUI(cfg.token || "", cfg.refreshToken || "");
+        setUserUI(cfg.user || null);
+        loginMessage.textContent = "";
+        qrPreview.innerHTML = "";
+        log("info", `Hydrated config for env: ${getEnv()}`);
+      }
+
+      envSelect.addEventListener("change", () => {
+        // close socket if exists
+        safeDisconnectSocket();
+        hydrateFromEnv();
       });
 
-      updateStatusBadge('connecting');
-      qrPreview.innerHTML = '<p class="text-muted">Waiting for QR...</p>';
-    });
-  </script>
-</body>
+      resetEnvBtn.addEventListener("click", () => {
+        const env = getEnv();
+        const all = loadAllConfig();
+        all[env] = structuredClone(defaultConfig[env]);
+        saveAllConfig(all);
+        safeDisconnectSocket();
+        hydrateFromEnv();
+        log("warn", `Reset config for env: ${env}`);
+      });
+
+      // persist basic fields
+      [authUrlInput, emailInput, passwordInput, socketUrlInput].forEach((el) => {
+        el.addEventListener("input", () => {
+          updateEnvConfig({
+            authUrl: authUrlInput.value.trim(),
+            email: emailInput.value.trim(),
+            password: passwordInput.value,
+            socketUrl: socketUrlInput.value.trim(),
+          });
+        });
+      });
+
+      jwtTokenInput.addEventListener("input", () => {
+        updateEnvConfig({ token: jwtTokenInput.value.trim() });
+        tokenPreview.textContent = jwtTokenInput.value.trim() || "No token";
+        setAuthBadge(!!jwtTokenInput.value.trim());
+      });
+
+      // -----------------------------
+      // Auth Login
+      // -----------------------------
+      loginBtn.addEventListener("click", async () => {
+        const authUrl = authUrlInput.value.trim();
+        const email = emailInput.value.trim();
+        const password = passwordInput.value;
+
+        if (!authUrl || !email || !password) {
+          log("error", "Auth URL, email, dan password wajib diisi");
+          loginMessage.textContent = "Please fill auth URL, email, password";
+          return;
+        }
+
+        loginMessage.textContent = "Logging in...";
+        log("info", "Auth login request", { env: getEnv(), authUrl, email });
+
+        try {
+          const res = await fetch(authUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password }),
+          });
+
+          const json = await res.json().catch(() => null);
+
+          if (!res.ok) {
+            log("error", `Login failed (${res.status})`, json || {});
+            loginMessage.textContent = "Login failed";
+            return;
+          }
+
+          // Expected shape based on your response
+          const token = json?.data?.token || "";
+          const refreshToken = json?.data?.refreshToken || "";
+          const user = json?.data?.user || null;
+
+          setTokenUI(token, refreshToken);
+          setUserUI(user);
+          updateEnvConfig({ authUrl, email, password });
+
+          loginMessage.textContent = json?.message ? json.message : "Login success";
+          log("info", "Login success", { statusCode: json?.statusCode, message: json?.message });
+
+        } catch (err) {
+          log("error", "Login error (network/exception)", { message: String(err) });
+          loginMessage.textContent = "Login error";
+        }
+      });
+
+      logoutAuthBtn.addEventListener("click", () => {
+        setTokenUI("", "");
+        setUserUI(null);
+        log("warn", "Token cleared");
+      });
+
+      copyTokenBtn.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(jwtTokenInput.value.trim());
+          log("info", "Token copied");
+        } catch (e) {
+          log("error", "Failed to copy token", { message: String(e) });
+        }
+      });
+
+      copyRefreshBtn.addEventListener("click", async () => {
+        const { cfg } = getEnvConfig();
+        try {
+          await navigator.clipboard.writeText(cfg.refreshToken || "");
+          log("info", "Refresh token copied");
+        } catch (e) {
+          log("error", "Failed to copy refresh token", { message: String(e) });
+        }
+      });
+
+      // -----------------------------
+      // Socket handling
+      // -----------------------------
+      let socket = null;
+
+      function safeDisconnectSocket() {
+        if (socket) {
+          try {
+            socket.disconnect();
+          } catch (_) {}
+          socket = null;
+          setSocketBadge("disconnected");
+        }
+      }
+
+      connectSocketBtn.addEventListener("click", () => {
+        const socketUrl = socketUrlInput.value.trim();
+        const token = jwtTokenInput.value.trim();
+
+        if (!socketUrl) {
+          log("error", "Socket URL wajib diisi");
+          return;
+        }
+        if (!token) {
+          log("warn", "Token kosong. Socket mungkin akan unauthorized.");
+        }
+
+        safeDisconnectSocket();
+        setSocketBadge("connecting");
+
+        log("socket", "Connecting socket...", { socketUrl, env: getEnv() });
+
+        socket = io(socketUrl, {
+          transports: ["websocket"],
+          reconnectionAttempts: 5,
+          auth: { token },
+        });
+
+        // core events
+        socket.on("connect", () => {
+          log("socket", "Socket connected", { id: socket.id });
+          setSocketBadge("connected");
+        });
+
+        socket.on("disconnect", () => {
+          log("warn", "Socket disconnected");
+          setSocketBadge("disconnected");
+        });
+
+        socket.on("connect_error", (err) => {
+          log("error", "Socket connect_error", { message: err?.message });
+          setSocketBadge("disconnected");
+        });
+
+        // your app events
+        socket.on("qr", (payload) => {
+          log("socket", "QR event received", payload);
+          const qr = payload?.qr;
+          if (qr) qrPreview.innerHTML = `<img src="${qr}" alt="QR Code" />`;
+          setSocketBadge("qr-waiting");
+        });
+
+        socket.on("status", (payload) => {
+          log("socket", "Status event received", payload);
+          const status = payload?.status;
+          if (status) setSocketBadge(status);
+        });
+
+        socket.on("unauthorized", (payload) => {
+          log("error", "Unauthorized", payload || {});
+          alert(`Unauthorized: ${payload?.message || "Something happen"}`);
+        });
+
+        socket.on("whatsapp.agent-listening", (payload) => log("socket", "whatsapp.agent-listening", payload));
+        socket.on("message-sent", (payload) => log("socket", "message-sent", payload));
+        socket.on("list-message", (payload) => log("socket", "list-message", payload));
+      });
+
+      disconnectSocketBtn.addEventListener("click", () => {
+        safeDisconnectSocket();
+        log("info", "Socket disconnected manually");
+      });
+
+      // -----------------------------
+      // Recording policy UI
+      // -----------------------------
+      recordingPolicy.addEventListener("change", () => {
+        const policy = recordingPolicy.value;
+        excludedContactsInputGroup.classList.toggle("d-none", policy !== "excluded");
+        selectedContactsInputGroup.classList.toggle("d-none", policy !== "selected");
+      });
+
+      // -----------------------------
+      // Request QR + Logout WA
+      // -----------------------------
+      requestBtn.addEventListener("click", () => {
+        if (!socket || !socket.connected) {
+          log("error", "Socket belum connected. Connect dulu.");
+          return;
+        }
+
+        const deviceId = deviceIdInput.value.trim();
+        if (!deviceId) {
+          log("error", "Device ID wajib diisi");
+          return;
+        }
+
+        const options = {
+          syncContacts: syncContacts.checked,
+          syncHistories: syncHistories.checked,
+          recordingPolicy: recordingPolicy.value,
+        };
+
+        if (options.recordingPolicy === "excluded") {
+          options.excludedContacts = excludedContacts.value
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
+        }
+
+        if (options.recordingPolicy === "selected") {
+          options.selectedContacts = selectedContacts.value
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
+        }
+
+        log("socket", "Emitting request-qr", { deviceId, options });
+        socket.emit("request-qr", { deviceId, options });
+
+        setSocketBadge("connecting");
+        qrPreview.innerHTML = '<p class="text-muted mb-0">Waiting for QR...</p>';
+      });
+
+      logoutBtn.addEventListener("click", () => {
+        if (!socket || !socket.connected) {
+          log("error", "Socket belum connected. Connect dulu.");
+          return;
+        }
+
+        const deviceId = deviceIdInput.value.trim();
+        if (!deviceId) {
+          log("error", "Device ID wajib diisi");
+          return;
+        }
+
+        log("socket", "Emitting logout", { deviceId });
+        socket.emit("logout", { deviceId });
+        alert(`Logout request sent for device ID: ${deviceId}`);
+      });
+
+      // -----------------------------
+      // Init
+      // -----------------------------
+      (function init() {
+        // first load
+        hydrateFromEnv();
+        setSocketBadge("disconnected");
+      })();
+    </script>
+  </body>
 </html>
