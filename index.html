@@ -52,6 +52,49 @@
         border: 1px solid rgba(0,0,0,0.08);
         background: rgba(255,255,255,0.6);
       }
+
+      /* Progress Ring */
+      .progress-ring {
+        width: 110px;
+        height: 110px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: conic-gradient(#0d6efd var(--p), #e9ecef 0);
+        position: relative;
+      }
+      .progress-ring::before {
+        content: "";
+        position: absolute;
+        width: 86px;
+        height: 86px;
+        border-radius: 999px;
+        background: #fff;
+        border: 1px solid #eef0f5;
+      }
+      .progress-ring .progress-text {
+        position: relative;
+        font-weight: 700;
+        font-size: 18px;
+      }
+      .preview-box {
+        background: #fff;
+        border: 1px solid #eef0f5;
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .preview-box img,
+      .preview-box video,
+      .preview-box audio,
+      .preview-box iframe {
+        width: 100%;
+        border-radius: 10px;
+        border: 1px solid #eef0f5;
+        background: #fff;
+      }
+      .preview-box iframe {
+        height: 360px;
+      }
     </style>
   </head>
 
@@ -261,6 +304,101 @@
               </div>
             </div>
           </div>
+
+          <!-- Download Media Simulator Card -->
+          <div class="card shadow-sm mt-3">
+            <div class="card-header py-3">
+              <div class="d-flex align-items-center justify-content-between">
+                <div>
+                  <div class="fw-semibold">4) Download Media Simulator</div>
+                  <div class="small-muted">Trigger download job + polling status
+                    + preview MinIO</div>
+                </div>
+                <span class="badge badge-soft text-dark"
+                  id="dlStatusBadge">idle</span>
+              </div>
+            </div>
+
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label">Download API URL (supports
+                    {deviceId} &amp; {messageId})</label>
+                  <input class="form-control" id="downloadUrlInput"
+                    placeholder="e.g. http://localhost:3000/api/messages/{messageId}/download?deviceId={deviceId}" />
+                  <div class="small-muted mt-1">
+                    Kalau pakai POST, URL bisa tanpa query. Body akan otomatis
+                    kirim: { deviceId, messageId }.
+                  </div>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Method</label>
+                  <select class="form-select" id="downloadMethodSelect">
+                    <option value="GET">GET</option>
+                    <option value="POST">POST</option>
+                  </select>
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Poll interval (ms)</label>
+                  <input class="form-control" id="downloadPollMsInput"
+                    type="number" min="250" step="250" value="1000" />
+                </div>
+
+                <div class="col-md-4">
+                  <label class="form-label">Timeout (ms)</label>
+                  <input class="form-control" id="downloadTimeoutMsInput"
+                    type="number" min="1000" step="1000" value="15000" />
+                </div>
+
+                <div class="col-12">
+                  <label class="form-label">Message ID</label>
+                  <input class="form-control" id="downloadMessageIdInput"
+                    placeholder="messageId yang kamu pakai di endpoint download" />
+                </div>
+
+                <div class="col-12 d-flex flex-wrap gap-2">
+                  <button class="btn btn-primary"
+                    id="downloadStartBtn">Start</button>
+                  <button class="btn btn-outline-secondary" id="downloadStopBtn"
+                    disabled>Stop</button>
+
+                  <div class="ms-auto d-flex align-items-center gap-2">
+                    <span class="small-muted">Job key:</span>
+                    <span class="mono small-muted" id="dlJobKey">—</span>
+                  </div>
+                </div>
+
+                <div
+                  class="col-12 d-flex flex-column flex-md-row gap-3 align-items-stretch">
+                  <div class="d-flex gap-3 align-items-center">
+                    <div class="progress-ring" id="dlProgressRing"
+                      style="--p: 0deg;">
+                      <div class="progress-text" id="dlProgressText">0%</div>
+                    </div>
+                    <div>
+                      <div class="fw-semibold" id="dlStatusText">idle</div>
+                      <div class="small-muted" id="dlHintText">Klik Start untuk
+                        trigger job &amp; polling.</div>
+                    </div>
+                  </div>
+
+                  <div class="flex-grow-1 preview-box">
+                    <div class="fw-semibold mb-2">Preview</div>
+                    <div id="dlPreviewArea" class="small-muted">No media
+                      yet</div>
+                  </div>
+                </div>
+
+                <div class="col-12">
+                  <div class="small-muted mb-2">Last response</div>
+                  <div class="token-box mono" id="dlLastResponse">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
 
         <!-- RIGHT COLUMN -->
@@ -317,13 +455,17 @@
       const STORAGE_KEY = "nyapa_simulator_env_config_v1";
       const defaultConfig = {
         local: {
-          authUrl: "http://localhost:3000/api/auth/login",
+          authUrl: "http://localhost:9800/auth/login",
           email: "",
           password: "",
           socketUrl: "http://localhost:3100",
           token: "",
           refreshToken: "",
           user: null,
+          downloadUrl: "http://localhost:3000/message/download-media",
+          downloadMethod: "POST",
+          downloadPollMs: 750,
+          downloadTimeoutMs: 180000,
         },
         uat: {
           authUrl: "http://uat.medisy.id/api/auth/login",
@@ -333,6 +475,10 @@
           token: "",
           refreshToken: "",
           user: null,
+          downloadUrl: "http://uat.medisy.id/api/messages/{messageId}/download?deviceId={deviceId}",
+          downloadMethod: "POST",
+          downloadPollMs: 750,
+          downloadTimeoutMs: 180000,
         },
         prod: {
           authUrl: "",
@@ -342,6 +488,10 @@
           token: "",
           refreshToken: "",
           user: null,
+          downloadUrl: "http://uat.medisy.id/api/messages/{messageId}/download?deviceId={deviceId}",
+          downloadMethod: "POST",
+          downloadPollMs: 750,
+          downloadTimeoutMs: 180000,
         },
       };
 
@@ -423,6 +573,27 @@
 
       const logBox = document.getElementById("logBox");
       const clearLogBtn = document.getElementById("clearLogBtn");
+
+      // --- Download Simulator refs ---
+      const downloadUrlInput = document.getElementById("downloadUrlInput");
+      const downloadMethodSelect = document.getElementById("downloadMethodSelect");
+      const downloadPollMsInput = document.getElementById("downloadPollMsInput");
+      const downloadTimeoutMsInput = document.getElementById("downloadTimeoutMsInput");
+      const downloadMessageIdInput = document.getElementById("downloadMessageIdInput");
+
+      const downloadStartBtn = document.getElementById("downloadStartBtn");
+      const downloadStopBtn = document.getElementById("downloadStopBtn");
+
+      const dlStatusBadge = document.getElementById("dlStatusBadge");
+      const dlStatusText = document.getElementById("dlStatusText");
+      const dlHintText = document.getElementById("dlHintText");
+      const dlJobKey = document.getElementById("dlJobKey");
+
+      const dlProgressRing = document.getElementById("dlProgressRing");
+      const dlProgressText = document.getElementById("dlProgressText");
+
+      const dlPreviewArea = document.getElementById("dlPreviewArea");
+      const dlLastResponse = document.getElementById("dlLastResponse");
 
       // -----------------------------
       // Logger
@@ -528,7 +699,27 @@
         setUserUI(cfg.user || null);
         loginMessage.textContent = "";
         qrPreview.innerHTML = "";
+
+        // Download settings
+        downloadUrlInput.value = cfg.downloadUrl || "";
+        downloadMethodSelect.value = cfg.downloadMethod || "GET";
+        downloadPollMsInput.value = String(cfg.downloadPollMs || 1000);
+        downloadTimeoutMsInput.value = String(cfg.downloadTimeoutMs || 15000);
+        downloadMessageIdInput.value = cfg.downloadMessageId || "";
+        resetDownloadUI();
+
         log("info", `Hydrated config for env: ${getEnv()}`);
+      }
+
+      function resetDownloadUI() {
+        dlStatusBadge.textContent = "idle";
+        dlStatusBadge.className = "badge badge-soft text-dark";
+        dlStatusText.textContent = "idle";
+        dlHintText.textContent = "Klik Start untuk trigger job & polling.";
+        dlJobKey.textContent = "—";
+        setProgress(0);
+        dlPreviewArea.innerHTML = '<div class="small-muted">No media yet</div>';
+        dlLastResponse.textContent = "—";
       }
 
       envSelect.addEventListener("change", () => {
@@ -558,6 +749,27 @@
           });
         });
       });
+      [downloadUrlInput, downloadMethodSelect, downloadPollMsInput, downloadTimeoutMsInput, downloadMessageIdInput]
+        .forEach((el) => {
+          el.addEventListener("input", () => {
+            updateEnvConfig({
+              downloadUrl: downloadUrlInput.value.trim(),
+              downloadMethod: downloadMethodSelect.value,
+              downloadPollMs: Number(downloadPollMsInput.value) || 1000,
+              downloadTimeoutMs: Number(downloadTimeoutMsInput.value) || 15000,
+              downloadMessageId: downloadMessageIdInput.value.trim(),
+            });
+          });
+          el.addEventListener("change", () => {
+            updateEnvConfig({
+              downloadUrl: downloadUrlInput.value.trim(),
+              downloadMethod: downloadMethodSelect.value,
+              downloadPollMs: Number(downloadPollMsInput.value) || 1000,
+              downloadTimeoutMs: Number(downloadTimeoutMsInput.value) || 1000,
+              downloadMessageId: downloadMessageIdInput.value.trim(),
+            });
+          });
+        });
 
       jwtTokenInput.addEventListener("input", () => {
         updateEnvConfig({ token: jwtTokenInput.value.trim() });
@@ -799,6 +1011,266 @@
         hydrateFromEnv();
         setSocketBadge("disconnected");
       })();
+
+let downloadTimer = null;
+let isDownloading = false;
+
+function setProgress(pct) {
+  const safe = Math.max(0, Math.min(100, Number(pct) || 0));
+  dlProgressText.textContent = `${safe}%`;
+  dlProgressRing.style.setProperty("--p", `${safe * 3.6}deg`);
+}
+
+function setDlStatus(status, kind) {
+  dlStatusText.textContent = status;
+  dlStatusBadge.textContent = status;
+
+  const cls = kind === "ok"
+    ? "text-success"
+    : kind === "warn"
+      ? "text-warning"
+      : kind === "err"
+        ? "text-danger"
+        : "text-dark";
+
+  dlStatusBadge.className = `badge badge-soft ${cls}`;
+}
+
+function buildDownloadUrl(template, deviceId, messageId) {
+  return template
+    .replaceAll("{deviceId}", encodeURIComponent(deviceId))
+    .replaceAll("{messageId}", encodeURIComponent(messageId));
+}
+
+function withTimeout(promise, ms) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`Timeout after ${ms}ms`)), ms);
+    promise
+      .then((v) => {
+        clearTimeout(t);
+        resolve(v);
+      })
+      .catch((e) => {
+        clearTimeout(t);
+        reject(e);
+      });
+  });
+}
+
+function renderMediaPreview(media) {
+  if (!media || !media.url) {
+    dlPreviewArea.innerHTML = '<div class="small-muted">No media yet</div>';
+    return;
+  }
+
+  const url = media.url;
+  const mimetype = (media.mimetype || "").toLowerCase();
+
+  if (mimetype.startsWith("image/")) {
+    dlPreviewArea.innerHTML = `<img src="${url}" alt="image preview" />`;
+    return;
+  }
+
+  if (mimetype === "application/pdf") {
+    dlPreviewArea.innerHTML = `<iframe src="${url}" title="pdf preview"></iframe>`;
+    return;
+  }
+
+  if (mimetype.startsWith("video/")) {
+    dlPreviewArea.innerHTML = `<video src="${url}" controls playsinline></video>`;
+    return;
+  }
+
+  if (mimetype.startsWith("audio/")) {
+    dlPreviewArea.innerHTML = `<audio src="${url}" controls></audio>`;
+    return;
+  }
+
+  dlPreviewArea.innerHTML = `
+    <div class="small-muted mb-2">Unsupported preview for mimetype: <span class="mono">${escapeHtml(mimetype || "unknown")}</span></div>
+    <a class="btn btn-sm btn-outline-primary" href="${url}" target="_blank" rel="noreferrer">Open media</a>
+  `;
+}
+
+function pickFirstString(obj, keys) {
+  if (!obj || typeof obj !== "object") return "";
+  for (const k of keys) {
+    const v = obj[k];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    if (typeof v === "number") return String(v);
+  }
+  return "";
+}
+
+function getHeadersFromLoggedInUser() {
+  const { cfg } = getEnvConfig();
+  const user = cfg.user;
+
+  // sesuaikan key sesuai struktur user kamu (aku bikin fallback beberapa kemungkinan umum)
+  const userId =
+    pickFirstString(user, ["id", "_id", "userId", "uid"]) ||
+    "";
+
+  const companyId =
+    pickFirstString(user, ["companyId", "company_id", "company", "cid"]) ||
+    "";
+
+  return { userId, companyId };
+}
+
+
+async function callDownloadEndpointOnce() {
+  const token = jwtTokenInput.value.trim();
+  const deviceId = deviceIdInput.value.trim();
+  const messageId = downloadMessageIdInput.value.trim();
+
+  const downloadUrlTemplate = downloadUrlInput.value.trim();
+  if (!downloadUrlTemplate) throw new Error("Download URL is empty");
+  if (!deviceId) throw new Error("Device ID is empty (section 3)");
+  if (!messageId) throw new Error("Message ID is empty");
+  if (!token) throw new Error("JWT token is empty (login dulu)");
+
+  const method = downloadMethodSelect.value || "GET";
+  const url = buildDownloadUrl(downloadUrlTemplate, deviceId, messageId);
+
+  const { userId, companyId } = getHeadersFromLoggedInUser();
+  if (!userId || !companyId) {
+    throw new Error("Missing x-user-id / x-company-id from logged-in user payload");
+  }
+
+  const headers = { "Content-Type": "application/json" };
+  headers["Authorization"] = `Bearer ${token}`;
+  headers["x-user-id"] = userId;
+  headers["x-company-id"] = companyId;
+
+  const timeoutMs = Number(downloadTimeoutMsInput.value) || 15000;
+
+  const fetchPromise = fetch(url, {
+    method,
+    headers,
+    body: method === "POST" ? JSON.stringify({ deviceId, messageId }) : undefined,
+  });
+
+  const res = await withTimeout(fetchPromise, timeoutMs);
+  const json = await res.json().catch(() => null);
+
+  if (!res.ok) {
+    const msg = json?.message || `HTTP ${res.status}`;
+    throw new Error(`Download API failed: ${msg}`);
+  }
+  if (!json) throw new Error("Empty JSON response");
+
+  return json;
+}
+
+function extractJobView(apiJson) {
+  // Expected shape from your backend:
+  // { messageId, jobKey, status, progress, error, media? }
+  const data = apiJson?.data ?? apiJson;
+  const status = data?.status || "unknown";
+  const progress = Number(data?.progress ?? 0);
+  const jobKey = data?.jobKey ?? null;
+  const error = data?.error ?? undefined;
+  const media = data?.media ?? undefined;
+
+  return { status, progress, jobKey, error, media, raw: data };
+}
+
+function stopDownloadPolling() {
+  if (downloadTimer) clearInterval(downloadTimer);
+  downloadTimer = null;
+  isDownloading = false;
+  downloadStartBtn.disabled = false;
+  downloadStopBtn.disabled = true;
+}
+
+async function tickDownload() {
+  try {
+    const apiJson = await callDownloadEndpointOnce();
+    const view = extractJobView(apiJson);
+
+    dlLastResponse.textContent = JSON.stringify(view.raw, null, 2);
+
+    if (view.jobKey) dlJobKey.textContent = view.jobKey;
+
+    setProgress(view.progress);
+
+    if (view.status === "done") {
+      setDlStatus("done", "ok");
+      dlHintText.textContent = "Media ready.";
+      renderMediaPreview(view.media);
+      stopDownloadPolling();
+      log("info", "Download job done", { jobKey: view.jobKey, media: view.media });
+      return;
+    }
+
+    if (view.status === "failed") {
+      setDlStatus("failed", "err");
+      dlHintText.textContent = view.error || "Job failed.";
+      stopDownloadPolling();
+      log("error", "Download job failed", { jobKey: view.jobKey, error: view.error });
+      return;
+    }
+
+    if (view.status === "working") {
+      setDlStatus("working", "warn");
+      dlHintText.textContent = "Downloading/uploading...";
+      return;
+    }
+
+    if (view.status === "pending") {
+      setDlStatus("pending", "warn");
+      dlHintText.textContent = "Queued...";
+      return;
+    }
+
+    setDlStatus(view.status, "warn");
+    dlHintText.textContent = "Polling...";
+  } catch (e) {
+    setDlStatus("error", "err");
+    dlHintText.textContent = e instanceof Error ? e.message : String(e);
+    log("error", "Download simulator error", { message: String(e) });
+    stopDownloadPolling();
+  }
+}
+
+downloadStartBtn.addEventListener("click", async () => {
+  if (isDownloading) return;
+
+  const pollMs = Math.max(250, Number(downloadPollMsInput.value) || 1000);
+  setDlStatus("starting", "warn");
+  setProgress(0);
+  dlPreviewArea.innerHTML = '<div class="small-muted">Waiting...</div>';
+  dlLastResponse.textContent = "—";
+  dlJobKey.textContent = "—";
+
+  isDownloading = true;
+  downloadStartBtn.disabled = true;
+  downloadStopBtn.disabled = false;
+
+  log("info", "Download simulator start", {
+    env: getEnv(),
+    method: downloadMethodSelect.value,
+    pollMs,
+    urlTemplate: downloadUrlInput.value.trim(),
+    deviceId: deviceIdInput.value.trim(),
+    messageId: downloadMessageIdInput.value.trim(),
+  });
+
+  // immediate call, then polling
+  await tickDownload();
+
+  if (!isDownloading) return;
+  downloadTimer = setInterval(tickDownload, pollMs);
+});
+
+downloadStopBtn.addEventListener("click", () => {
+  stopDownloadPolling();
+  setDlStatus("stopped", "warn");
+  dlHintText.textContent = "Stopped by user.";
+  log("warn", "Download simulator stopped");
+});
+
     </script>
   </body>
 </html>
